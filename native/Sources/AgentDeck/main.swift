@@ -75,6 +75,7 @@ import UserNotifications
   lazy var supervisor = SupervisorStore(deck: self)
   private var stream: Task<Void, Never>?
   private var service: Process?
+  private var startingService = false
   private var seenRequests: Set<String> = []
   private let guiControlClient = NativeGUIControlClient()
   private var updater: SPUStandardUpdaterController?
@@ -271,44 +272,52 @@ import UserNotifications
     return true
   }
   private func startService() {
-    guard service?.isRunning != true else { return }
-    // launchd already owns installed services. A transient reconnect must not
-    // create another daemon with a different port/token and overwrite connection.json.
-    let managed = Process()
-    managed.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-    managed.arguments = ["print", "gui/\(getuid())/com.aiagentdeck.service"]
-    managed.standardOutput = FileHandle.nullDevice
-    managed.standardError = FileHandle.nullDevice
-    if (try? managed.run()) != nil {
-      managed.waitUntilExit()
-      if managed.terminationStatus == 0 { return }
+    guard !startingService, service?.isRunning != true else { return }
+    startingService = true
+    let uid = getuid()
+    Task { [weak self] in
+      let launchdManaged = await Task.detached(priority: .utility) { () -> Bool in
+        // launchd already owns installed services. A transient reconnect must not
+        // create another daemon with a different port/token and overwrite connection.json.
+        let managed = Process()
+        managed.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        managed.arguments = ["print", "gui/\(uid)/com.aiagentdeck.service"]
+        managed.standardOutput = FileHandle.nullDevice
+        managed.standardError = FileHandle.nullDevice
+        guard (try? managed.run()) != nil else { return false }
+        managed.waitUntilExit()
+        return managed.terminationStatus == 0
+      }.value
+      guard let self else { return }
+      defer { self.startingService = false }
+      guard !launchdManaged, self.service?.isRunning != true else { return }
+      let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/DeckService.bundle/Contents/MacOS/deck-service")
+      guard FileManager.default.isExecutableFile(atPath: url.path) else {
+        self.message = "Build and install the native service to connect."
+        return
+      }
+      let process = Process()
+      process.executableURL = url
+      var env = ProcessInfo.processInfo.environment
+      env["AGENT_DECK_APP"] = Bundle.main.bundlePath
+      env["AGENT_DECK_PORT"] = String(self.port)
+      env["AGENT_DECK_RUNTIME"] = self.runtime.path
+      process.environment = env
+      let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+        "Library/Logs/AgentDeck-service.log")
+      if !FileManager.default.fileExists(atPath: log.path) {
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+      }
+      if let handle = try? FileHandle(forWritingTo: log) {
+        _ = try? handle.seekToEnd()
+        process.standardOutput = handle
+        process.standardError = handle
+      }
+      do {
+        try process.run()
+        self.service = process
+      } catch { self.message = error.localizedDescription }
     }
-    let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/DeckService.bundle/Contents/MacOS/deck-service")
-    guard FileManager.default.isExecutableFile(atPath: url.path) else {
-      message = "Build and install the native service to connect."
-      return
-    }
-    let process = Process()
-    process.executableURL = url
-    var env = ProcessInfo.processInfo.environment
-    env["AGENT_DECK_APP"] = Bundle.main.bundlePath
-    env["AGENT_DECK_PORT"] = String(port)
-    env["AGENT_DECK_RUNTIME"] = runtime.path
-    process.environment = env
-    let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-      "Library/Logs/AgentDeck-service.log")
-    if !FileManager.default.fileExists(atPath: log.path) {
-      FileManager.default.createFile(atPath: log.path, contents: nil)
-    }
-    if let handle = try? FileHandle(forWritingTo: log) {
-      _ = try? handle.seekToEnd()
-      process.standardOutput = handle
-      process.standardError = handle
-    }
-    do {
-      try process.run()
-      service = process
-    } catch { message = error.localizedDescription }
   }
   private func connect() async {
     var delay = 1
@@ -474,9 +483,36 @@ import UserNotifications
   }
   @discardableResult func captureMasterHUBProfile(name: String) -> UUID? {
     let profile = MasterHUBApplicationProfile(name: name, configuration: masterhubConfiguration)
+    guard !profile.name.isEmpty else {
+      masterhubProfileStatus = "Enter a profile name."; return nil
+    }
+    guard profile.name.count <= 80 else {
+      masterhubProfileStatus = "Profile names must be 80 characters or fewer."; return nil
+    }
+    guard masterhubProfiles.profiles.count < 32 else {
+      masterhubProfileStatus = "You can save up to 32 profiles. Delete one before saving another."; return nil
+    }
+    let folded = profile.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+    guard !masterhubProfiles.profiles.contains(where: {
+      $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX")) == folded
+    }) else {
+      masterhubProfileStatus = "A profile named “\(profile.name)” already exists."; return nil
+    }
     var value = masterhubProfiles; value.profiles.append(profile)
     guard persistMasterHUBProfiles(value) else { return nil }
     masterhubProfileStatus = "Saved \(profile.name) from the current assignments."; return profile.id
+  }
+  func renameMasterHUBProfile(_ id: UUID, name: String) -> Bool {
+    do {
+      let updated = try masterhubProfiles.renamingProfile(id, to: name)
+      guard persistMasterHUBProfiles(updated) else { return false }
+      let savedName = updated.profiles.first { $0.id == id }?.name ?? name
+      masterhubProfileStatus = "Profile renamed to \(savedName)."
+      return true
+    } catch {
+      masterhubProfileStatus = error.localizedDescription
+      return false
+    }
   }
   func assignMasterHUBProfile(_ id: UUID, bundleID: String) {
     guard bundleID != (Bundle.main.bundleIdentifier ?? "com.aiagentdeck.app"),
@@ -487,6 +523,13 @@ import UserNotifications
     guard persistMasterHUBProfiles(value) else { return }
     masterhubProfileStatus = "Application assignment saved."
     if value.automaticEnabled { pendingProfileSelection = true; applyPendingMasterHUBProfileIfSafe() }
+  }
+  func unassignMasterHUBProfile(bundleID: String) {
+    let updated = masterhubProfiles.unassigningBundleID(bundleID)
+    guard updated != masterhubProfiles else { return }
+    guard persistMasterHUBProfiles(updated) else { return }
+    masterhubProfileStatus = "Removed assignment for \(bundleID)."
+    if updated.automaticEnabled { pendingProfileSelection = true; applyPendingMasterHUBProfileIfSafe() }
   }
   func selectMasterHUBProfile(_ id: UUID?) {
     let profile = masterhubProfiles.profiles.first { $0.id == id }
@@ -512,6 +555,17 @@ import UserNotifications
     if activeMasterHUBProfileID == id { applyMasterHUBProfile(nil, configuration: MasterHUBConfigurationStore.load()) }
     if profileUndo?.id == id { profileUndo = nil }
     masterhubProfileStatus = "Profile deleted; Default and other profiles were preserved."
+  }
+  func exportMasterHUBProfiles() -> Data? {
+    do {
+      let data = try masterhubProfiles.exportData()
+      let count = masterhubProfiles.profiles.count
+      masterhubProfileStatus = "Exported \(count) saved profile\(count == 1 ? "" : "s")."
+      return data
+    } catch {
+      masterhubProfileStatus = error.localizedDescription
+      return nil
+    }
   }
   func importMasterHUBProfiles(_ data: Data) {
     do {
@@ -1457,6 +1511,7 @@ struct MenuBarView: View {
 }
 struct SettingsView: View {
   @AppStorage("dashboardAnimatedArtwork") private var animatedArtwork = false
+  @AppStorage("attention.soundEnabled") private var attentionSoundEnabled = true
   @EnvironmentObject var model: DeckModel
   @State private var login = false
   @State private var installerMessage = ""
@@ -1483,6 +1538,11 @@ struct SettingsView: View {
           isOn: Binding(
             get: { model.preferences.reduceMotion },
             set: { value in model.savePreferences { $0.reduceMotion = value } }))
+        Toggle("Play sound when an agent needs input", isOn: $attentionSoundEnabled)
+        Toggle("Approve Cursor & Gemini tool calls on deck", isOn: Binding(
+          get: { model.preferences.toolHookApprovals == true },
+          set: { value in model.savePreferences { $0.toolHookApprovals = value } }))
+          .help("Prompt on the deck for Cursor Shell/MCP and Gemini tool calls. When off, those CLIs use their own prompts without waiting.")
         Toggle("Open at login", isOn: $login).onChange(of: login) { _, value in
           do {
             if value {
@@ -1494,7 +1554,7 @@ struct SettingsView: View {
         }
         Button("Review setup") { model.showSetup = true }
         LabeledContent("MasterHUB", value: model.masterhubStatus)
-        Text("Keys 1–9: agents. Keys 10–12: volume and mute. Key 13: app. Key 14: shortcut. Key 15: Agent Deck.")
+        Text("Agents page: keys 1–10 select sessions, keys 11–15 navigate, open Attention/Actions, and switch pages. Also includes Mac, Media, Tools, and Handoffs.")
           .font(.caption)
         LabeledContent("Connection", value: model.connected ? "Connected" : "Disconnected")
         Toggle("Animate dashboard artwork", isOn: $animatedArtwork)

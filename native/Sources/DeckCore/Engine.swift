@@ -177,31 +177,8 @@ public actor DeckEngine {
     case "permissionrequest":
       s.status = .waiting
       s.detail = "Permission requested"
-      if decisionChannel && agent == "claude" {
-        let rid = UUID().uuidString
-        let input = data["tool_input"] as? [String: Any] ?? [:]
-        let context: String
-        if let command = input["command"] as? String {
-          context = command
-        } else if let file = input["file_path"] as? String {
-          context = file
-        } else {
-          context = "\(s.tool) requests permission in \(s.workspace)."
-        }
-        requests[rid] = PendingRequest(
-          id: rid, sessionId: id, title: "Allow \(s.tool.isEmpty ? "this action" : s.tool)?",
-          context: context,
-          choices: [
-            .init(id: "allow", label: "Allow once", requiresHold: true),
-            .init(id: "deny", label: "Deny"),
-          ], createdAt: now, expiresAt: now + 300_000, state: "pending", revision: 1,
-          source: "claude-hook")
-        requests[rid]?.toolUseId = data["tool_use_id"] as? String
-        requestId = rid
-        Task {
-          try? await Task.sleep(for: .seconds(300))
-          self.cancelRequest(rid, reason: "Request expired. Answer in the original session.")
-        }
+      if decisionChannel && ["claude", "codex"].contains(agent) {
+        requestId = createApprovalRequest(agent: agent, key: key, session: s, data: data, now: now)
       }
     case "notification":
       let type = data["notification_type"] as? String ?? ""
@@ -210,9 +187,18 @@ public actor DeckEngine {
         s.detail = "Open the session to respond"
       }
     case "userpromptsubmit", "beforesubmitprompt", "beforeagent", "pretooluse", "beforetool",
-      "preinvocation":
-      s.status = .working
-      s.detail = s.tool.isEmpty ? "Working" : s.tool
+      "preinvocation", "beforeshellexecution", "beforemcpexecution":
+      if decisionChannel && preferences.toolHookApprovals == true
+        && ((agent == "cursor" && ["beforeshellexecution", "beforemcpexecution"].contains(key))
+          || (agent == "gemini" && key == "beforetool"))
+      {
+        s.status = .waiting
+        s.detail = "Permission requested"
+        requestId = createApprovalRequest(agent: agent, key: key, session: s, data: data, now: now)
+      } else {
+        s.status = .working
+        s.detail = s.tool.isEmpty ? "Working" : s.tool
+      }
     case "posttooluse", "aftertool", "aftermcpexecution", "aftershellexecution", "afterfileedit":
       s.status = .working
       s.detail = s.tool.isEmpty ? "Working" : "Completed \(s.tool)"
@@ -263,6 +249,50 @@ public actor DeckEngine {
     record(s.detail, session: id, outcome: s.status.rawValue)
     persist()
     return (id, requestId)
+  }
+  private func createApprovalRequest(
+    agent: String, key: String, session: SessionSnapshot, data: [String: Any], now: Double
+  ) -> String {
+    let rid = UUID().uuidString
+    func nonEmpty(_ value: Any?) -> String? {
+      guard let text = value as? String, !text.isEmpty else { return nil }
+      return text
+    }
+    let label: String
+    if !session.tool.isEmpty {
+      label = session.tool
+    } else if key == "beforeshellexecution" {
+      label = "Shell"
+    } else if key == "beforemcpexecution" {
+      label = nonEmpty(data["mcp_name"]) ?? "MCP tool"
+    } else {
+      label = "this action"
+    }
+    let input = data["tool_input"] as? [String: Any] ?? [:]
+    let context =
+      nonEmpty(input["command"])
+      ?? nonEmpty(data["command"])
+      ?? nonEmpty(input["file_path"])
+      ?? nonEmpty(input["path"])
+      ?? nonEmpty(input["dir_path"])
+      ?? nonEmpty(data["file_path"])
+      ?? nonEmpty(input["url"])
+      ?? nonEmpty(data["reason"])
+      ?? "\(label) requests permission in \(session.workspace)."
+    requests[rid] = PendingRequest(
+      id: rid, sessionId: session.id, title: "Allow \(label)?",
+      context: context,
+      choices: [
+        .init(id: "allow", label: "Allow once", requiresHold: true),
+        .init(id: "deny", label: "Deny"),
+      ], createdAt: now, expiresAt: now + 300_000, state: "pending", revision: 1,
+      source: "\(agent)-hook")
+    requests[rid]?.toolUseId = data["tool_use_id"] as? String
+    Task {
+      try? await Task.sleep(for: .seconds(300))
+      self.cancelRequest(rid, reason: "Request expired. Answer in the original session.")
+    }
+    return rid
   }
   public func registerRequest(
     sessionId: String, title: String, context: String, choices: [RequestChoice], source: String

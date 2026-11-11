@@ -26,8 +26,16 @@ public enum HookMetadata {
     if let id = response["backgroundTaskId"] as? String ?? response["background_task_id"] as? String {
       result["background_job"] = ["id": id, "type": kind, "status": response["status"] as? String ?? "running"]
     }
-    if permissionContext, let input = payload["tool_input"] as? [String: Any] {
-      result["tool_input"] = input.filter { ["command", "file_path"].contains($0.key) }
+    if permissionContext {
+      for key in ["command", "file_path", "reason", "mcp_name"] {
+        if let value = payload[key] { result[key] = value }
+      }
+      if let input = payload["tool_input"] as? [String: Any] {
+        let allowedInputKeys: Set<String> = [
+          "command", "file_path", "path", "dir_path", "url", "server_name", "reason",
+        ]
+        result["tool_input"] = input.filter { allowedInputKeys.contains($0.key) }
+      }
     }
     return result
   }

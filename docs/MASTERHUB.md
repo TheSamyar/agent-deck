@@ -129,8 +129,7 @@ and opening Agent Deck. Keyboard tools act on the currently focused application.
 These pages remain available while the agent service is offline.
 
 Key artwork uses large symbols, saturated color panels, and one short label rather
-than tiny secondary text. Animated display scheduling remains unfinished; this
-installed revision uses static artwork.
+than tiny secondary text.
 
 ## Root-session lifecycle
 
@@ -162,5 +161,8 @@ live-owner survival followed by automatic disconnection on exit.
 A root remains Working while a shell, tool, or subagent is outstanding. The round
 screen identifies Shell running, Subagents running, or Processing results. A child
 finishing does not finish its parent: a final root Stop with no outstanding work
-confirms Done. Actual approval/input requests use Needs input. Child work aggregates
-under its root instead of creating extra agent tiles; stale turn completions are ignored.
+confirms Done. Actual approval/input requests use Needs input. Codex CLI supports request-specific
+approvals via `PermissionRequest` hooks, and Cursor and Gemini CLI support opt-in
+tool-hook deck approval prompts when enabled in General settings (off by default,
+falling back to each CLI's prompt). Child work aggregates under its root instead of
+creating extra agent tiles; stale turn completions are ignored.

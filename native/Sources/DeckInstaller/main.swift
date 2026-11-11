@@ -94,14 +94,20 @@ func configure(_ relative: String, agent: String, events: [String], cursor: Bool
       var entries = (hooks[event] as? [Any] ?? []).compactMap { withoutOwned($0) }
       if !remove {
         let command = "\(quotedHook) \(agent) \(event)"
+        let timeout =
+          agent == "gemini"
+          ? (event == "BeforeTool" ? 310000 : 3000)
+          : (["claude", "codex"].contains(agent) && event == "PermissionRequest")
+            || (agent == "cursor"
+              && ["beforeShellExecution", "beforeMCPExecution"].contains(event)) ? 310 : 3
         if cursor {
-          entries.append(["command": command])
+          entries.append(["command": command, "timeout": timeout])
         } else {
           var entry: [String: Any] = [
             "hooks": [
               [
                 "type": "command", "command": command,
-                "timeout": agent == "gemini" ? 3000 : agent == "claude" && event == "PermissionRequest" ? 310 : 3,
+                "timeout": timeout,
               ]
             ]
           ]
@@ -136,7 +142,8 @@ configure(
 configure(
   ".cursor/hooks.json", agent: "cursor",
   events: [
-    "beforeSubmitPrompt", "afterMCPExecution", "afterShellExecution", "afterFileEdit", "stop",
+    "beforeSubmitPrompt", "beforeShellExecution", "beforeMCPExecution", "afterMCPExecution",
+    "afterShellExecution", "afterFileEdit", "stop",
   ], cursor: true)
 configure(
   ".gemini/settings.json", agent: "gemini",

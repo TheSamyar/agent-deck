@@ -97,6 +97,7 @@ public struct DeckPreferences: Codable, Sendable, Equatable {
   public var projectNames: [String: String] = [:]
   public var mutedProjects: [String] = []
   public var showIdleSessions: Bool? = nil
+  public var toolHookApprovals: Bool? = nil
   public var automaticSingleAgent = false
   public var reduceMotion = false
   public var notifications = false

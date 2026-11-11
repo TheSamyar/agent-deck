@@ -226,17 +226,29 @@ actor ServiceRouter {
         let decision = await engine.waitForDecision(id)
         monitor.cancel()
         if let decision {
-          let output: [String: Any] = [
-            "hookSpecificOutput": [
-              "hookEventName": "PermissionRequest", "decision": ["behavior": decision],
+          let output: [String: Any]
+          switch agent {
+          case "cursor":
+            output = ["permission": decision]
+          case "gemini":
+            output = ["decision": decision]
+          default:
+            output = [
+              "hookSpecificOutput": [
+                "hookEventName": "PermissionRequest", "decision": ["behavior": decision],
+              ]
             ]
-          ]
+          }
           return LocalResponse(
             body: (try? JSONSerialization.data(withJSONObject: output)) ?? Data("{}".utf8))
         }
-        return LocalResponse(body: Data("{}".utf8))
+        return LocalResponse(
+          body: Data((agent == "cursor" ? #"{"permission":"ask"}"# : "{}").utf8))
       }
-      if channel { return LocalResponse(body: Data("{}".utf8)) }
+      if channel {
+        return LocalResponse(
+          body: Data((agent == "cursor" ? #"{"permission":"ask"}"# : "{}").utf8))
+      }
       return .json(["ok": true])
     }
     if path == "/codex/start" {

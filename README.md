@@ -32,6 +32,10 @@ display shows the selected agent and its position. The app previews the same art
 Bounded activity animations respect Reduce Motion. Media shows Spotify playback
 state and cached album artwork when local Automation access is available.
 
+![Mission Control overview](docs/images/mission-control.png)
+
+![Media page on MasterHUB](docs/images/masterhub-media.png)
+
 ## Try it
 
 Agent Deck is an open-source development preview. Build it from source below; prebuilt binaries will be published on GitHub Releases later. Candidate-specific physical checks remain
@@ -92,11 +96,15 @@ start the agent service, install hooks, request permissions, or execute real act
 These observations cover the development rig, not every Mac. Intel builds are
 cross-compiled; physical Intel certification remains outstanding.
 
-Claude Code supports hook status and supported request-specific approvals. Codex
-structured approvals require explicitly app-managed sessions. Cursor supports
-workspace focus and companion-extension terminal routing. Gemini CLI provides hook
-status. Antigravity remains experimental. Unsupported actions are shown explicitly;
-the app never guesses approval keystrokes.
+Claude Code and Codex CLI support hook status and request-specific approvals via
+`PermissionRequest` hooks (plus app-managed Codex sessions). Cursor supports workspace
+focus and companion-extension terminal routing, and `beforeShellExecution` /
+`beforeMCPExecution` hooks support opt-in deck approval prompts when enabled in
+General settings (off by default, falling back to Cursor's prompt). Gemini CLI
+provides hook status, and its `BeforeTool` hook supports opt-in deck approval prompts
+when enabled in General settings (off by default, falling back to Gemini CLI's prompt).
+Antigravity remains experimental. Unsupported actions are shown explicitly; the app
+never guesses approval keystrokes.
 
 ## Local by default
 
@@ -110,7 +118,7 @@ local setup, and compare the same sample in each mode. See the
 
 Agent state stays on your Mac. Pending approval context stays in memory; bounded
 session metadata/history uses local SQLite. Notifications are opt-in. Spotify is
-controlled locally; planned album artwork may require fetching an artwork URL.
+controlled locally; cached album artwork fetches the current track's artwork URL when Automation access is available.
 The optional supervisor stores conversation transcripts, lessons, and managed-task
 history locally. Cloud mode sends conversation/task context and live voice to its
 provider; Local mode uses on-device speech and a loopback model server.
@@ -165,7 +173,7 @@ Agent Deck talks to MasterHUB modules through native IOHID. IDs below come from 
 - Development preview. Build from source for now; signed releases on GitHub Releases are planned.
 - Hardware observations cover the maintainer's rig, not every Mac. Intel builds are cross-compiled; physical Intel certification is outstanding.
 - Only one app instance can own the deck. Firmware updates and network control of other Macs are out of scope.
-- Agent support is uneven: Claude Code has hooks and request-specific approvals; Codex structured approvals need app-managed sessions; Cursor has workspace focus; Gemini CLI has hook status; Antigravity is experimental. Unsupported actions are shown, never guessed.
+- Agent support varies: Claude Code and Codex CLI support request-specific approvals via `PermissionRequest` hooks (plus app-managed Codex sessions); Cursor (`beforeShellExecution`, `beforeMCPExecution`) and Gemini CLI (`BeforeTool`) support opt-in deck approval prompts when enabled in General settings (off by default, falling back to each CLI's prompt), alongside Cursor workspace focus and Gemini CLI hook status; Antigravity is experimental. Unsupported actions are shown, never guessed.
 - Other keypad families are experimental and outside the MasterHUB preview package.
 
 ## Credits

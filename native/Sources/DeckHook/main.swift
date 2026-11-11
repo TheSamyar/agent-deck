@@ -33,7 +33,12 @@ if tty.isEmpty {
     if text.hasPrefix("ttys") { tty = "/dev/" + text }
   }
 }
-let waiting = agent == "claude" && event.lowercased() == "permissionrequest"
+let eventKey = event.lowercased().filter(\.isLetter)
+let isPermissionHook = ["claude", "codex"].contains(agent) && eventKey == "permissionrequest"
+let isToolHook =
+  (agent == "cursor" && ["beforeshellexecution", "beforemcpexecution"].contains(eventKey))
+  || (agent == "gemini" && eventKey == "beforetool")
+let waiting = isPermissionHook || isToolHook
 let owner = ProcessWitness.agentOwner(startingAt: Int(getppid()), agent: agent)
 let witness = owner ?? ProcessWitness.read(Int(getppid()))
 let body: [String: Any] = [
@@ -49,12 +54,21 @@ do {
   let response = try LocalIO.unixRequest(
     path: runtime + "/deck.sock", route: "/hook/\(agent)/\(event)",
     body: JSONSerialization.data(withJSONObject: body), timeout: waiting ? 305 : 2)
-  if agent == "gemini" { print("{}") }
-  if waiting {
+  let trimmedResponse =
+    String(data: response, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+  if waiting && !trimmedResponse.isEmpty {
     FileHandle.standardOutput.write(response)
     FileHandle.standardOutput.write(Data("\n".utf8))
+  } else if agent == "gemini" {
+    print("{}")
+  } else if agent == "cursor" && isToolHook {
+    print(#"{"permission":"ask"}"#)
   }
 } catch {
   // No decision leaves the agent's original permission flow intact.
-  if waiting || agent == "gemini" { print("{}") }
+  if agent == "cursor" && isToolHook {
+    print(#"{"permission":"ask"}"#)
+  } else if waiting || agent == "gemini" {
+    print("{}")
+  }
 }
