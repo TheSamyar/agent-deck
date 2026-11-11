@@ -180,7 +180,8 @@ while True: signal.pause()
   await mkdir(path.join(home,'.gemini'),{recursive:true});
   execFileSync(installer,['--home',home,'--hook','/Applications/Agent Deck.app/Contents/MacOS/deck-hook','--agents','gemini']);
   const geminiHooks=JSON.parse(await readFile(path.join(home,'.gemini/settings.json'),'utf8'));
-  assert.equal(geminiHooks.hooks.BeforeTool[0].hooks[0].timeout,3000,'Gemini timeout must be milliseconds');
+  assert.equal(geminiHooks.hooks.BeforeTool[0].hooks[0].timeout,310000,'Gemini BeforeTool approval timeout must be milliseconds');
+  assert.equal(geminiHooks.hooks.AfterTool[0].hooks[0].timeout,3000,'Gemini notification timeout must be milliseconds');
   const chain=['/Applications/Codex Computer Use.app/Sky','turn-ended','--previous-notify',JSON.stringify(['/old/agent-hook.mjs','codex','turn-ended'])];
   await writeFile(codexConfig,'notify = '+JSON.stringify(chain)+'\nmodel = "user-choice"\n');
   execFileSync(installer,['--home',home,'--hook','/Applications/Agent Deck.app/Contents/MacOS/deck-hook','--agents','codex']);

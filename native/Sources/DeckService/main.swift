@@ -17,9 +17,7 @@ actor ServiceRouter {
   var guiScanID: String?
   var voiceLeases: [String: String] = [:]
   var executing = false
-  var bridges: [String: [String: Any]] = [:]
-  var bridgeCommands: [String: [String: Any]] = [:]
-  var bridgeResults: [String: ActionResult] = [:]
+  var bridgeRegistry = EditorTerminalBridgeRegistry()
   init(engine: DeckEngine, token: String, port: Int) {
     self.engine = engine
     self.token = token
@@ -53,41 +51,47 @@ actor ServiceRouter {
       if command.action == "stop" && command.heldMs < 700 {
         return .failure("Hold Stop for 0.7 seconds to confirm.")
       }
-      if session.hostInstanceId == "managed-codex" {
-        if command.action == "stop" {
-          var interrupted = await codex.interrupt(sessionId: session.id)
-          interrupted.commandId = command.id
-          return await engine.remember(interrupted)
-        }
-        await engine.setSelection(session.id)
-        return await actionOpenApp()
-      }
-      if command.action == "stop" {
-        var interrupted = await controls.interrupt(session)
+      let bridgeTarget = bridgeRegistry.findTarget(forSessionPID: session.pid, now: DeckClock.now)
+      switch SessionActionRouter.route(
+        action: command.action, session: session, bridgeTarget: bridgeTarget)
+      {
+      case .managedCodex(stop: true):
+        var interrupted = await codex.interrupt(sessionId: session.id)
         interrupted.commandId = command.id
         return await engine.remember(interrupted)
-      }
-      if let bridge = findBridge(session), let instance = bridge["instanceId"] as? String,
-        let terminal = bridge["targetTerminalId"] as? String
-      {
-        if command.action == "focus" {
-          let raised = await focusInApp(session)
-          guard raised.ok else { return await engine.remember(raised) }
+      case .managedCodex(stop: false):
+        await engine.setSelection(session.id)
+        var opened = await actionOpenApp()
+        opened.commandId = command.id
+        return await engine.remember(opened)
+      case .bridge(let target, let raiseWindowFirst):
+        if raiseWindowFirst {
+          var raised = await focusInApp(session)
+          guard raised.ok else {
+            raised.commandId = command.id
+            return await engine.remember(raised)
+          }
         }
-        bridgeCommands[instance] = [
-          "id": command.id, "terminalId": terminal, "action": command.action,
-        ]
+        bridgeRegistry.enqueueCommand(
+          instanceId: target.instanceId, commandId: command.id,
+          terminalId: target.terminalId, action: command.action)
         for _ in 0..<30 {
-          if let reply = bridgeResults.removeValue(forKey: command.id) {
-            if reply.ok { await engine.setSelection(session.id) }
+          if let reply = bridgeRegistry.takeResult(for: command.id) {
+            if reply.ok && command.action == "focus" { await engine.setSelection(session.id) }
             return await engine.remember(reply)
           }
           try? await Task.sleep(for: .milliseconds(100))
         }
-        bridgeCommands.removeValue(forKey: instance)
+        bridgeRegistry.cancelCommand(instanceId: target.instanceId, commandId: command.id)
         result = .failure("The editor did not acknowledge this action. Reconnect its extension.")
-      } else {
+      case .localTerminalInterrupt:
+        var interrupted = await controls.interrupt(session)
+        interrupted.commandId = command.id
+        return await engine.remember(interrupted)
+      case .guiFocus:
         result = await focusInApp(session)
+      case .unsupported:
+        result = .failure("This action is not supported.")
       }
     case "dashboard":
       let app = ProcessInfo.processInfo.environment["AGENT_DECK_APP"] ?? ""
@@ -120,21 +124,6 @@ actor ServiceRouter {
       _ = await MainActor.run { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }
     }
     return .init(ok: true, state: "acknowledged", message: "Opened Agent Deck")
-  }
-  func findBridge(_ session: SessionSnapshot) -> [String: Any]? {
-    let live = bridges.values.filter { DeckClock.now - ($0["updatedAt"] as? Double ?? 0) < 5000 }
-    let matches = live.compactMap { bridge -> [String: Any]? in
-      let terminals = bridge["terminals"] as? [[String: Any]] ?? []
-      let match = terminals.filter { t in
-        let pids = t["processTree"] as? [Int] ?? []
-        return session.pid > 0 && pids.contains(session.pid)
-      }
-      guard match.count == 1, let terminal = match[0]["id"] as? String else { return nil }
-      var value = bridge
-      value["targetTerminalId"] = terminal
-      return value
-    }
-    return matches.count == 1 ? matches[0] : nil
   }
   func handle(_ request: LocalRequest) async -> LocalResponse? {
     let path = URLComponents(string: request.path)?.path ?? request.path
@@ -282,19 +271,33 @@ actor ServiceRouter {
       } catch { return .json(ActionResult.failure("Could not save settings"), status: 400) }
     }
     if path == "/bridge" {
-      guard request.isUnix, let instance = request.json["instanceId"] as? String else {
+      guard request.isUnix, let instance = request.json["instanceId"] as? String, !instance.isEmpty
+      else {
         return .json(ActionResult.failure("Private editor connection required"), status: 403)
       }
-      var value = request.json
-      value["updatedAt"] = DeckClock.now
-      bridges[instance] = value
-      if let result = value["result"] as? [String: Any], let id = result["id"] as? String {
-        bridgeResults[id] = ActionResult(
-          ok: result["ok"] as? Bool ?? false,
-          state: result["ok"] as? Bool == true ? "acknowledged" : "failed",
-          message: result["message"] as? String ?? "Editor action completed", commandId: id)
+      let rawTerminals = request.json["terminals"] as? [[String: Any]] ?? []
+      let parsedTerminals = rawTerminals.compactMap { entry -> EditorTerminalEntry? in
+        guard let id = entry["id"] as? String, !id.isEmpty else { return nil }
+        let processTree = entry["processTree"] as? [Int] ?? []
+        return EditorTerminalEntry(id: id, processTree: processTree)
       }
-      let command = bridgeCommands.removeValue(forKey: instance) ?? [:]
+      let parsedResult: (id: String, ok: Bool, message: String)?
+      if let rawResult = request.json["result"] as? [String: Any],
+        let id = rawResult["id"] as? String, !id.isEmpty
+      {
+        parsedResult = (
+          id: id,
+          ok: rawResult["ok"] as? Bool ?? false,
+          message: rawResult["message"] as? String ?? "Editor action completed"
+        )
+      } else {
+        parsedResult = nil
+      }
+      bridgeRegistry.recordPoll(
+        instanceId: instance, terminals: parsedTerminals, result: parsedResult, now: DeckClock.now)
+      let pending = bridgeRegistry.takePendingCommand(for: instance)
+      let command: [String: Any] =
+        pending.map { ["id": $0.id, "terminalId": $0.terminalId, "action": $0.action] } ?? [:]
       return LocalResponse(
         body: (try? JSONSerialization.data(withJSONObject: ["ok": true, "command": command]))
           ?? Data())
@@ -381,7 +384,7 @@ actor ServiceRouter {
     for session in liveSessions {
       if session.hostInstanceId == "managed-codex" {
         await engine.setCapabilities(session.id, focus: true, interrupt: await codex.canInterrupt(sessionId: session.id))
-      } else if findBridge(session) != nil {
+      } else if bridgeRegistry.findTarget(forSessionPID: session.pid, now: DeckClock.now) != nil {
         await engine.setCapabilities(session.id, focus: true, interrupt: true)
       } else {
         await engine.setCapabilities(

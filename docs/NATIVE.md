@@ -34,7 +34,7 @@ Plugin-file detection is an installation check, not physical device detection. T
 | Attention | Oldest pending requests first, original command context, explicit confirmation in the app, held confirmation on the keypad. Unsupported prompts open their original session. |
 | Claude Code | Private-socket permission hook returns the decision to its own waiting invocation. Cancellation and expiry invalidate controls. |
 | Codex | Optional app-owned App Server sessions support structured command/file approvals and turn interruption. Existing unrelated desktop sessions are not claimed as controllable. |
-| Cursor | Workspace-window focus; installed companion extension maps shell process trees to exact terminals. Activation requires an editor-window reload. |
+| Cursor | Workspace-window focus; installed companion extension maps shell process trees to exact terminals for terminal reveal (`focus`) and verified terminal interrupt (`stop` after a 0.7-second hold). Activation requires an editor-window reload. |
 | Terminal / iTerm | Identity-based native focus. Stop checks terminal foreground process ownership before signaling its process group. iTerm still needs a real-device integration pass. |
 | Keypads | Six session slots, paging, Attention, adaptive single-session view, buffered layouts during holds, one-time commands, cached static artwork, and pushed state. |
 | Privacy | Local SQLite metadata/history; pending command context is memory-only. Diagnostics omit prompts, paths, and command text. Notifications are opt-in with sound off. |
@@ -46,7 +46,7 @@ Gemini uses verified hook events for status. Antigravity's legacy hook installat
 - `native/Sources/DeckCore`: contracts, actor-based state, SQLite, layout/artwork, and native window/process control.
 - `native/Sources/DeckTransport`, `DeckService`, and `DeckHook`: bounded local HTTP/private-socket transport, event streaming, editor routing, and permission leases.
 - `native/Sources/AgentDeck` and `DeckInstaller`: SwiftUI product surfaces and owned hook/profile installation with backups.
-- `cursor-extension`: terminal process identity, terminal reveal, and private local connection. `plugin`: thin vendor adapter, artwork cache, hold input, and reconnect support.
+- `cursor-extension`: maps shell process trees to exact terminals and supports terminal reveal (`focus`), verified terminal interrupt (`stop` after a 0.7-second hold), and a private local connection. `plugin`: thin vendor adapter, artwork cache, hold input, and reconnect support.
 - Runtime: `~/Library/Application Support/Agent Deck/deck.sqlite`, `~/Library/Caches/AgentDeck/{connection.json,deck.sock}`, and `~/Library/Logs/AgentDeck-service.log`.
 
 The SQLite history is capped at 1,000 metadata events and seven days. Pending approvals are never restored from disk. Restored sessions start disconnected until their host or provider is observed again. The socket and connection file are readable only by the current user. Loopback HTTP requires a rotating bearer token and rejects browser origins. This protects against network/browser access; it does not attempt to isolate malicious processes already running as the same macOS user.

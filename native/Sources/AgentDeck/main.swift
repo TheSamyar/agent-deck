@@ -1592,7 +1592,7 @@ struct SettingsView: View {
         }
         Text(model.message).font(.caption).foregroundStyle(.secondary)
         Text(
-          "Claude permissions can be answered here. Other agents show the actions their connection supports. Restart terminal sessions after setup."
+          "Claude and Codex CLI permissions can be answered here; Cursor and Gemini tool approvals can be enabled in General settings. Restart terminal sessions after setup."
         ).font(.caption).foregroundStyle(.secondary)
         Text(installerMessage).font(.caption)
       }.formStyle(.grouped).tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }

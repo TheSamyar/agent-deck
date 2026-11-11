@@ -50,9 +50,9 @@ public enum IntegrationReadiness {
     }
     let required: [String]
     switch agent {
-    case "codex": required = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]
+    case "codex": required = ["SessionStart", "UserPromptSubmit", "PermissionRequest", "Stop", "SessionEnd"]
     case "claude": required = ["SessionStart", "PermissionRequest", "Stop"]
-    case "cursor": required = ["beforeSubmitPrompt", "stop"]
+    case "cursor": required = ["beforeSubmitPrompt", "beforeShellExecution", "beforeMCPExecution", "stop"]
     case "gemini": required = ["SessionStart", "BeforeTool", "AfterAgent"]
     default: return .unsupported
     }

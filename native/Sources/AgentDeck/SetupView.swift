@@ -34,19 +34,25 @@ struct SetupView: View {
     let configuration = model.integrationConfiguration[agent] ?? .missing
     let sessions = observedSessions.filter { $0.agentId == agent }
     return HStack(alignment: .top, spacing: 12) {
-      Toggle(agentName(agent), isOn: Binding(
-        get: { model.preferences.enabledAgents.contains(agent) },
-        set: { enabled in
-          model.savePreferences { preferences in
-            preferences.enabledAgents.removeAll { $0 == agent }
-            if enabled { preferences.enabledAgents.append(agent) }
-          }
-        })).disabled(model.installing || !model.connected)
+      VStack(alignment: .leading, spacing: 2) {
+        Toggle(agentName(agent), isOn: Binding(
+          get: { model.preferences.enabledAgents.contains(agent) },
+          set: { enabled in
+            model.savePreferences { preferences in
+              preferences.enabledAgents.removeAll { $0 == agent }
+              if enabled { preferences.enabledAgents.append(agent) }
+            }
+          })).disabled(model.installing || !model.connected)
+        if agent == "antigravity" {
+          Text("Experimental adapter · does not install CLI hooks yet.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+      }
       Spacer()
       VStack(alignment: .trailing, spacing: 3) {
-        Label(configuration.label, systemImage: configuration == .ready ? "checkmark.circle.fill" : "circle.dashed")
+        Label(configuration.label, systemImage: configuration == .ready ? "checkmark.circle.fill" : configuration == .unsupported ? "flask" : "circle.dashed")
           .font(.caption.weight(.medium))
-          .foregroundStyle(configuration == .ready ? Color.green : Color.secondary)
+          .foregroundStyle(configuration == .ready ? Color.green : (configuration == .unsupported || configuration == .invalid) ? Color.orange : Color.secondary)
         Text(sessions.isEmpty ? "No live session" : "\(sessions.count) observed session\(sessions.count == 1 ? "" : "s")")
           .font(.caption).foregroundStyle(.secondary)
       }
@@ -92,7 +98,7 @@ struct SetupView: View {
             Text("Choose your agents. Hooks installed and live sessions are separate checks; an installed hook does not mean an agent is running.")
               .foregroundStyle(.secondary)
             ForEach(["claude", "codex", "cursor", "gemini", "antigravity"], id: \.self) { connectionRow($0) }
-            Text("Codex: request controls require a session started from Agent Deck. Existing notify commands are preserved. Antigravity’s native adapter is experimental.")
+            Text("Codex CLI supports PermissionRequest hook approvals alongside app-managed sessions; Cursor and Gemini tool approvals can be enabled in General settings. Existing notify commands are preserved. Antigravity’s native adapter is experimental and does not install CLI hooks yet.")
               .font(.caption).foregroundStyle(.secondary)
             Toggle("Include Cursor terminal bridge", isOn: $editor).disabled(model.installing)
             Text("After installation, reload Cursor windows when convenient. Working terminals are not reloaded for you.")
@@ -116,6 +122,7 @@ struct SetupView: View {
             Label(model.serviceAccessibilityGranted == true ? "Mac window controls connected"
               : model.serviceAccessibilityGranted == false ? "Mac window controls need app access" : "Connecting Mac window controls…",
               systemImage: model.serviceAccessibilityGranted == true ? "checkmark.circle.fill" : "hand.raised")
+              .foregroundStyle(model.serviceAccessibilityGranted == true ? .green : model.serviceAccessibilityGranted == false ? .orange : .secondary)
             Text("Window discovery and focus run inside Agent Deck. Enable the app’s Accessibility entry; the background service does not need its own permission.")
               .font(.caption).foregroundStyle(.secondary)
             Text("Window focus needs Accessibility access. macOS may also ask to control the terminal or editor you choose. Approval hooks respond directly to their original request.")
