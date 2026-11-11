@@ -1,0 +1,13 @@
+{
+  "name": "agent-deck-bridge",
+  "displayName": "Agent Deck Bridge",
+  "description": "Connect exact editor terminals to the local Agent Deck app.",
+  "version": "0.2.0",
+  "publisher": "agent-deck",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.cjs",
+  "capabilities": { "untrustedWorkspaces": { "supported": false }, "virtualWorkspaces": false },
+  "contributes": { "commands": [{ "command": "agentDeck.reconnect", "title": "Agent Deck: Reconnect" }] }
+}

@@ -1,0 +1,62 @@
+# Build outputs
+node_modules/
+obj/
+bin/*
+!bin/agent-hook.mjs
+plugin/[Bb]in/
+plugin/[Oo]bj/
+plugin/dist/
+plugin/*.lplug4
+scripts/[Bb]in/
+scripts/[Oo]bj/
+
+daemon/*.node
+
+# Logs & Runtime State
+*.log
+state.json
+
+# macOS
+.DS_Store
+
+# Native app outputs
+native/.build/
+native/.swiftpm/
+dist/
+*.dmg
+*.zip
+
+# Local voice runtime caches
+__pycache__/
+*.py[cod]
+
+# Local comparison picker selection
+output/robin-brain-picker/choice.json
+
+# Open-source hygiene (added)
+.env
+.env.*
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+*.cer
+*.notarytoolprofile
+sparkle_ed25519*
+output/
+!output/.gitkeep
+.claude/
+*.xcuserstate
+
+# Internal-only docs (kept on disk, not published)
+docs/PRIVATE-UPDATES.md
+docs/QA-2026-11-01.md
+docs/JARVIS-IMPLEMENTATION.md
+docs/PREVIEW-VALIDATION.md
+docs/launch-posts.md
+docs/GITHUB-TOPICS.md
+output/robin-acceptance/
+CLAUDE.md
+*.p7b
+*.certSigningRequest

@@ -1,0 +1,30 @@
+name: Hardware or display problem
+description: Report a MasterHUB input, display, or reconnect issue.
+body:
+  - type: markdown
+    attributes:
+      value: Do not include tokens, prompts, command context, serial numbers, or private project paths.
+  - type: input
+    id: environment
+    attributes:
+      label: Mac model, macOS version, and Agent Deck version
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Module and connection path
+      description: Include whether you use an external USB hub.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected result, and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe evidence
+      description: Input counts, error codes, or a photo with private information removed. Connected is different from input observed or action verified.

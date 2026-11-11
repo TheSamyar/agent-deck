@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import {parseCPUTime,validateObservation,summarize} from './benchmark-native.mjs';
+assert.equal(parseCPUTime('02:03.50'),123.5);
+assert.equal(parseCPUTime('01:02:03.50'),3723.5);
+assert.equal(parseCPUTime('2-01:02:03'),176523);
+assert.throws(()=>parseCPUTime('invalid'));
+const initial={observedAt:1000,elapsedSeconds:0,processes:{gui:{identity:'start-a',cpuSeconds:2,rssKB:100},service:{identity:'start-b',cpuSeconds:3,rssKB:200}},hardware:{updatedAt:999,frames:5,failures:1,dialFailures:0,lifetimeFailures:3,dialLifetimeFailures:0,inputErrors:0,keypadConnected:true,rollerConnected:true,knobsConnected:true,screenDialConnected:true}};
+const current=structuredClone(initial);current.observedAt=1030;current.elapsedSeconds=30;current.hardware.updatedAt=1029;current.hardware.frames=8;current.processes.gui.cpuSeconds=5;current.processes.gui.rssKB=110;
+validateObservation(initial,current);
+const changed=mutate=>{const copy=structuredClone(current);mutate(copy);return copy;};
+assert.throws(()=>validateObservation(initial,changed(row=>row.processes.gui.identity='reused')),/PID was reused/);
+assert.throws(()=>validateObservation(initial,changed(row=>delete row.processes.gui)),/exited/);
+assert.throws(()=>validateObservation(initial,changed(row=>row.processes.gui.rssKB=NaN)),/metrics are invalid/);
+assert.throws(()=>validateObservation(initial,changed(row=>row.hardware.updatedAt=900)),/stale/);
+assert.throws(()=>validateObservation(initial,changed(row=>row.hardware.updatedAt=NaN)),/invalid/);
+assert.throws(()=>validateObservation(initial,changed(row=>row.hardware.frames=0)),/reset/);
+assert.throws(()=>validateObservation(initial,changed(row=>row.hardware.rollerConnected=false)),/connection changed/);
+assert.throws(()=>validateObservation(initial,changed(row=>delete row.hardware.knobsConnected)),/state is missing/);
+const report=summarize(initial,[current]);
+assert.equal(report.profiles.gui.memoryGrowthKB,10);
+assert.equal(report.profiles.gui.averageCPUPercent,10);
+assert.equal(report.transfers.frames,3);
+assert.equal(report.zeroNewTransferFailures,true,'Existing historical failures must not count as new failures');
+assert.equal(summarize(initial,[changed(row=>row.hardware.lifetimeFailures++)]).zeroNewTransferFailures,false);
+assert.equal(summarize(initial,[changed(row=>row.hardware.inputErrors++)]).zeroNewTransferFailures,false);
+console.log('PASS: CPU parsing, PID identity, stale diagnostics, reset counters, baseline memory and new transfer failures.');

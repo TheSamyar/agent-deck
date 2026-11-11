@@ -1,0 +1,1 @@
+Claude, Cursor, and Antigravity icons extracted unchanged from their installed official macOS apps. Gemini favicon: https://www.gstatic.com/lamda/images/gemini_favicon_f069958c85030456e93de685481c559f160ea06b.png . Codex uses the OpenAI icon from the official installed ChatGPT macOS app to identify its provider. Trademarks belong to their respective owners.

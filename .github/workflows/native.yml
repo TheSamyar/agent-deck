@@ -1,0 +1,57 @@
+name: Native app
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Offline browser, subscription, and dashboard checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Daemon session and action routing
+        run: node --test daemon/*.test.mjs
+      - name: Clean-commit release preparation policy
+        run: node --test scripts/release-native.test.mjs
+      - name: Private release download and local delivery boundaries
+        run: python3 scripts/test-private-updates.py
+      - name: Stability measurement policy
+        run: node scripts/test-benchmark-native.mjs
+      - name: Browser grants and replay protection
+        run: node scripts/test-browser-bridge.mjs
+      - name: Subscription sign-in and billing boundaries
+        run: python3 scripts/test-subscription-planner.py
+      - name: Subscription task launch policy
+        run: python3 scripts/test-subscription-task.py
+      - name: Dashboard origin and private-data boundaries
+        run: python3 scripts/test-robin-dashboard-qa.py
+  native:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - run: swift test --package-path native
+      - name: Alfred compatibility host permissions and cancellation
+        run: |
+          native/.build/debug/AgentDeck --test-alfred-upgrades
+          native/.build/debug/AgentDeck --test-robin-workflow
+      - run: node scripts/test-native.mjs
+      - name: Browser native-host framing and authenticated service
+        run: python3 scripts/test-jarvis-native-bridge.py
+      - run: node scripts/test-native-lifecycle.mjs
+      - run: node scripts/test-supervisor.mjs
+      - run: python3 scripts/test-kokoro-voice.py
+      - run: node scripts/build-native.mjs --universal --release
+      - run: node scripts/verify-native-release.mjs

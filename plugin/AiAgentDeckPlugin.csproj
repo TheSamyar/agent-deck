@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <VendorSdkRoot Condition="'$(VendorSdkRoot)' == ''">/Applications/Utilities/LogiPluginService.app/Contents/MonoBundle</VendorSdkRoot>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>AiAgentDeckPlugin</AssemblyName>
+    <RootNamespace>Loupedeck.AiAgentDeckPlugin</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <Product>AI Agent Deck Plugin</Product>
+    <Company>Samyar</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="PluginApi">
+      <HintPath>$(VendorSdkRoot)/PluginApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="LoupedeckShared">
+      <HintPath>$(VendorSdkRoot)/LoupedeckShared.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SkiaSharp">
+      <HintPath>$(VendorSdkRoot)/SkiaSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,1 @@
+Generated sculptural interpretations of provider marks using the official app icons in ../ProviderLogos as references. Created with the imagegen skill for the Agent Deck stage. Provider marks belong to their owners; these decorative interpretations do not imply endorsement. Hardware retains original assets.

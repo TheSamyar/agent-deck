@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Agent Deck Browser Bridge",
+  "version": "0.1.0",
+  "description": "Local Jarvis control of explicitly approved sites.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4lS2CsPkQYTfgjQ2SLD5sIFXH6m96L6wJEeirh9olSRQRTqy6FFa7HP/87e0BieTAo8KhIutS/j7r1ubXizo2UlZmLKgVeBkNfKFGa1Hv7oupzckMVuY3i6KfGTbusZoS/YeWW14+ba6v69Mhz0QLXwETUBwnllQFky9JUktN4AszEQ2m7gG7YYUuEy+1yB8okoeWAnLUqMO/DARgf+01DDN67YSlu1UZ+3C9Jyl2S/w5Y6IqWvU1LTL6tRtJR72IBuqERSgDt+5g6jgKpRU2IBnLjPejL+zfqsov+0m4VD5PFEpZ96gQKmeIowkcl7XTEGlWYDIjbyC8/o+1jHskQIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
